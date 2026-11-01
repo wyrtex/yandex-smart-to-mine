@@ -161,6 +161,7 @@ function summary(d) {
 async function loadDevices() {
   const data = await api("/api/devices");
   S.rooms = data.rooms;
+  S.households = data.households || [];
   S.devices = Object.fromEntries(data.devices.map((d) => [d.id, d]));
 }
 async function loadScenarios() {
@@ -274,13 +275,27 @@ function renderHome() {
       <div class="sub">${ya && !ya.logged_in ? "Войдите в аккаунт Яндекса в «Настройках», и устройства появятся здесь."
         : ya?.last_error ? "Ошибка Яндекса: " + esc(ya.last_error) : "Загрузка…"}</div></div></div></div>`;
   }
+  // выбор дома, если их несколько
+  const houses = (S.households || []).filter((h) => devs.some((d) => d.household_id === h.id));
+  let house = localStorage.getItem("house") || "";
+  if (house && !houses.some((h) => h.id === house)) house = "";
+  let head = `<h1>${esc(houses.length === 1 ? houses[0].name : house ? houses.find((h) => h.id === house).name : "Дом")}</h1>`;
+  if (houses.length > 1) {
+    head += `<div class="chips" style="margin:-4px 0 6px">
+      <button class="chip ${house ? "" : "active"}" data-house="">Все дома</button>
+      ${houses.map((h) => `<button class="chip ${house === h.id ? "active" : ""}" data-house="${esc(h.id)}">${esc(h.name)}</button>`).join("")}</div>`;
+  }
+  const shown = house ? devs.filter((d) => d.household_id === house || !d.household_id) : devs;
   const groups = {};
-  for (const d of devs) {
-    const room = d.room_name || (d.source === "zigbee" ? "Zigbee" : "Без комнаты");
+  for (const d of shown) {
+    let room = d.room_name || (d.source === "zigbee" ? "Zigbee" : "Без комнаты");
+    if (houses.length > 1 && !house && d.household_id) {
+      room = (houses.find((h) => h.id === d.household_id)?.name || "") + " · " + room;
+    }
     (groups[room] ||= []).push(d);
   }
   const names = Object.keys(groups).sort((a, b) => a.localeCompare(b, "ru"));
-  return `<h1>Дом</h1>` + names.map((r) =>
+  return head + names.map((r) =>
     `<h2>${esc(r)}</h2><div class="grid">${groups[r].sort((a, b) => a.name.localeCompare(b.name, "ru")).map(cardHTML).join("")}</div>`
   ).join("");
 }
@@ -288,12 +303,14 @@ function renderHome() {
 // ---- карточка устройства
 function openDevice(id) {
   S.openDevice = id;
+  if (typeof B !== "undefined") B.open = false;
   renderDevice(id);
   $("#sheet").classList.remove("hidden");
   loadSparklines(id);
 }
 function closeSheet() {
   S.openDevice = null;
+  if (typeof B !== "undefined") B.open = false;
   $("#sheet").classList.add("hidden");
   $("#sheet-content").innerHTML = "";
 }
@@ -408,6 +425,17 @@ function renderDevice(id) {
   const ORDER = ["on_off", "range", "color_setting", "mode", "toggle"];
   const rank = (c) => { const i = ORDER.indexOf(shortType(c.type)); return i < 0 ? 99 : i; };
   html += [...d.capabilities].sort((a, b) => rank(a) - rank(b)).map((c) => capControl(d, c)).join("");
+  if (d.is_speaker) {
+    const QUICK = ["Стоп", "Громче", "Тише", "Включи музыку", "Какая погода", "Который час"];
+    html += `<h2>Колонка</h2>
+      <div class="ctl"><input id="speak-text" type="text" maxlength="100" placeholder="Текст или команда (до 100 символов)">
+      <div class="btns" style="margin-top:8px">
+        <button class="btn primary" data-speak="${esc(d.id)}" data-mode="tts">🔊 Сказать</button>
+        <button class="btn" data-speak="${esc(d.id)}" data-mode="command">🗣 Выполнить как команду</button></div>
+      <div class="chips" style="margin-top:8px">${QUICK.map((q) =>
+        `<button class="chip" data-speak="${esc(d.id)}" data-mode="command" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>
+      <div class="muted small" style="margin-top:6px">«Сказать» — колонка произнесёт текст. «Команда» — как будто вы сказали это Алисе.</div></div>`;
+  }
   if (d.properties.length) {
     html += `<h2>Показания</h2>` + d.properties.map((p) => {
       const inst = p.parameters.instance;
@@ -456,26 +484,12 @@ function drawSparklines(id) {
 }
 
 // ---- сценарии
-const TEMPLATE = {
-  name: "Свет в прихожей при открытии двери",
-  enabled: true,
-  mode: "restart",
-  triggers: [{ type: "state", device: "Датчик двери", key: "event.open", to: "opened" }],
-  conditions: [{ type: "time", after: "18:00", before: "07:00" }],
-  actions: [
-    { type: "device", device: "Свет в прихожей", set: { "on_off.on": true, "range.brightness": 70 } },
-    { type: "delay", seconds: 180 },
-    { type: "device", device: "Свет в прихожей", set: { "on_off.on": false } },
-  ],
-};
-
 function renderScenarios() {
   let html = `<h1>Сценарии</h1><div class="btns" style="margin-bottom:12px">
     <button class="btn primary" data-sc-new>+ Новый сценарий</button></div>`;
   html += `<div class="list">` + (S.scenarios.length ? S.scenarios.map((s) => {
     const lr = s.last_run;
-    const trig = s.triggers.map((t) => t.type === "time" ? `в ${t.at}` : t.type === "interval" ? `каждые ${t.seconds} с`
-      : `${t.device || "любое"}: ${t.key || "*"}${t.to !== undefined ? " → " + JSON.stringify(t.to) : ""}`).join(", ") || "только вручную";
+    const trig = describeScenario(s);
     return `<div class="row"><div class="grow" data-sc-edit="${esc(s.id)}" style="cursor:pointer">
       <div class="title">${esc(s.name)} ${s.running ? '<span class="badge ok">выполняется</span>' : ""}</div>
       <div class="sub">${esc(trig)}${lr ? ` · ${fmtTime(lr.ts)} ${lr.ok === false ? "⚠️" : ""}` : ""}</div></div>
@@ -488,32 +502,6 @@ function renderScenarios() {
        <button class="btn small" data-ya-run="${esc(s.id)}">▶</button></div>`).join("")}</div>`;
   }
   return html;
-}
-
-function editScenario(id) {
-  const sc = id ? S.scenarios.find((s) => s.id === id) : null;
-  const data = sc ? { ...sc } : { ...TEMPLATE };
-  delete data.running; delete data.last_run;
-  const keys = Object.values(S.devices).sort((a, b) => a.name.localeCompare(b.name, "ru")).map((d) =>
-    `<div style="margin:6px 0"><b>${esc(d.name)}</b><br>${Object.keys(d.states).filter((k) => !k.startsWith("z2m.")).map((k) =>
-      `<code class="key" data-copy="${esc(k)}">${esc(k)}</code>`).join(" ")}</div>`).join("");
-  S.openDevice = null;
-  $("#sheet-content").innerHTML = `<div style="font-size:20px;font-weight:700;margin-bottom:10px">${sc ? "Сценарий" : "Новый сценарий"}</div>
-    <textarea id="sc-json" rows="22" spellcheck="false" autocapitalize="off" autocorrect="off">${esc(JSON.stringify(data, null, 2))}</textarea>
-    <div class="btns" style="margin-top:10px">
-      <button class="btn primary" data-sc-save>Сохранить</button>
-      ${sc ? `<button class="btn" data-sc-run="${esc(sc.id)}">▶ Запустить</button>
-              <button class="btn danger" data-sc-del="${esc(sc.id)}">Удалить</button>` : ""}
-    </div>
-    <details><summary>Справка</summary><div class="small" style="line-height:1.6">
-      <b>Триггеры</b>: <code>state</code> (device, key, to, from, above, below) · <code>time</code> (at "07:30", days [1..7]) · <code>interval</code> (seconds)<br>
-      <b>Условия</b>: <code>state</code> (device, key, op: eq/ne/gt/lt/ge/le/in, value) · <code>time</code> (after, before, days) · <code>not</code>/<code>or</code> (conditions)<br>
-      <b>Действия</b>: <code>device</code> (device, set {ключ: значение}; "+5"/"-5" — относительно) · <code>delay</code> (seconds) ·
-      <code>yandex_scenario</code> (scenario) · <code>scenario</code> (scenario) · <code>log</code> (message)<br>
-      <b>mode</b>: single — не запускать повторно, restart — перезапускать, parallel — параллельно.<br>
-      Устройство можно указать по имени или id.</div></details>
-    <details><summary>Устройства и ключи</summary><div class="small">${keys || "нет устройств"}</div></details>`;
-  $("#sheet").classList.remove("hidden");
 }
 
 // ---- журнал
@@ -636,7 +624,7 @@ function showLogin() {
 const debounce = {};
 document.addEventListener("click", async (e) => {
   const t = e.target.closest("[data-power],[data-dev],[data-set],[data-close],[data-tab],[data-color],[data-copy]," +
-    "[data-sc-new],[data-sc-edit],[data-sc-run],[data-sc-save],[data-sc-del],[data-ya-run]," +
+    "[data-sc-new],[data-sc-edit],[data-house],[data-speak],[data-sc-run],[data-ya-run]," +
     "[data-ya-code],[data-ya-logout],[data-ya-check],[data-qr-start],[data-permit],[data-reload],[data-native-settings],[data-login]");
   if (!t) return;
   const ds = t.dataset;
@@ -654,19 +642,17 @@ document.addEventListener("click", async (e) => {
       await act(ds.id, set);
     } else if (ds.copy) {
       toast(copyText(ds.copy) ? "Скопировано" : "Не удалось скопировать", false);
-    } else if (ds.scNew !== undefined) editScenario(null);
-    else if (ds.scEdit) editScenario(ds.scEdit);
+    } else if (ds.scNew !== undefined) openBuilder(null);
+    else if (ds.scEdit) openBuilder(ds.scEdit);
+    else if (ds.house !== undefined) { localStorage.setItem("house", ds.house); render(); }
+    else if (ds.speak) {
+      const text = ds.text || $("#speak-text")?.value || "";
+      if (!text.trim()) { toast("Введите текст", true); return; }
+      await api(`/api/devices/${encodeURIComponent(ds.speak)}/speak`, { body: { text, mode: ds.mode } });
+      toast(ds.mode === "command" ? "Команда отправлена" : "Отправлено на колонку");
+    }
     else if (ds.scRun) { await api(`/api/scenarios/${encodeURIComponent(ds.scRun)}/run`, { body: {} }); toast("Запущено"); }
-    else if (ds.scSave !== undefined) {
-      let data;
-      try { data = JSON.parse($("#sc-json").value); } catch (err) { toast("Ошибка JSON: " + err.message, true); return; }
-      await api("/api/scenarios", { body: data });
-      toast("Сохранено"); closeSheet(); await loadScenarios(); render();
-    } else if (ds.scDel) {
-      if (!confirm("Удалить сценарий?")) return;
-      await api(`/api/scenarios/${encodeURIComponent(ds.scDel)}`, { method: "DELETE" });
-      closeSheet(); await loadScenarios(); render();
-    } else if (ds.yaRun) { await api(`/api/yandex/scenarios/${encodeURIComponent(ds.yaRun)}/run`, { body: {} }); toast("Запущено"); }
+    else if (ds.yaRun) { await api(`/api/yandex/scenarios/${encodeURIComponent(ds.yaRun)}/run`, { body: {} }); toast("Запущено"); }
     else if (ds.yaCode !== undefined) {
       await api("/api/yandex/code", { body: { code: $("#ya-code").value } });
       toast("Вход выполнен"); setTimeout(refreshAll, 1500);

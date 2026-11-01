@@ -84,13 +84,14 @@ Condition.model_rebuild()
 
 
 class ScenarioAction(_M):
-    type: Literal["device", "delay", "yandex_scenario", "scenario", "log"]
+    type: Literal["device", "delay", "yandex_scenario", "scenario", "log", "speak", "command"]
     device: str | None = None
     set: dict[str, Any] | None = None
     actions: list[dict[str, Any]] | None = None  # сырые действия в формате Яндекса
     seconds: float | None = None
     scenario: str | None = None
     message: str | None = None
+    text: str | None = None  # для speak / command
 
 
 class Scenario(_M):
@@ -335,6 +336,8 @@ class ScenarioEngine:
             await self.hub.execute(act.device or "", actions)
         elif act.type == "delay":
             await asyncio.sleep(act.seconds or 0)
+        elif act.type in ("speak", "command"):
+            await self.hub.speak(act.device or "", act.text or "", "tts" if act.type == "speak" else "command")
         elif act.type == "log":
             self.hub.log("scenarios", act.message or "")
         elif act.type == "scenario":

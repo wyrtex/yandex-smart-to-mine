@@ -213,9 +213,22 @@ class Hub:
             optimistic[key] = value
         self.update_states(dev.id, optimistic)
 
+    async def speak(self, id_or_name: str, text: str, mode: str = "tts") -> None:
+        dev = self.find(id_or_name)
+        if not dev:
+            raise KeyError(f"Устройство «{id_or_name}» не найдено")
+        adapter = self.adapters.get(dev.source)
+        if not adapter or not hasattr(adapter, "speak"):
+            raise RuntimeError(f"{dev.name}: озвучка не поддерживается")
+        await adapter.speak(dev, text, mode)
+        self.log("speaker", f"{dev.name}: {'сказать' if mode == 'tts' else 'команда'} «{text}»")
+
     def to_dict(self, dev: Device) -> dict[str, Any]:
         data = dev.model_dump(mode="json")
         data["room_name"] = self.rooms.get(dev.room or "", None)
+        data["is_speaker"] = bool(getattr(dev, "quasar_info", None)) or dev.type.startswith(
+            "devices.types.smart_speaker"
+        )
         data["states"] = device_states(dev)
         return data
 

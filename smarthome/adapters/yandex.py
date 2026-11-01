@@ -259,6 +259,12 @@ class YandexAdapter:
         await client.run_scenario(scenario_id)
         self.poll_soon(2)
 
+    async def speak(self, device: Device, text: str, mode: str = "tts") -> None:
+        client = await self._get_client()
+        if not isinstance(client, QuasarClient):
+            raise YandexAPIError("Озвучка работает только при входе по QR-коду")
+        await client.speak(device.id, text, mode)
+
     def status(self) -> dict[str, Any]:
         tok = self.token_info()
         return {

@@ -210,12 +210,48 @@ class QuasarSession:
         raise YandexAPIError(f"{url}: ответ {r.status_code} {r.text[:200]}", status_code=r.status_code)
 
 
+MASK_EN = "0123456789abcdef-"
+MASK_RU = "оеаинтсрвлкмдпуяы"
+HELPER_PREFIX = "SH "  # служебные сценарии для озвучки, в интерфейсе скрыты
+TTS_MAX = 100
+
+
+def encode_trigger(uid: str) -> str:
+    """UID -> фраза из русских букв (Яндекс принимает только такие голосовые триггеры)."""
+    return "".join(MASK_RU[MASK_EN.index(ch)] for ch in uid.lower() if ch in MASK_EN)
+
+
+def helper_scenario(device_id: str, text: str, mode: str) -> dict[str, Any]:
+    """Служебный сценарий: голосовой триггер-пустышка + действие на колонке."""
+    if mode == "tts":
+        capability = {"type": "devices.capabilities.quasar",
+                      "state": {"instance": "tts", "value": {"text": text}}}
+    else:
+        capability = {"type": "devices.capabilities.quasar.server_action",
+                      "state": {"instance": "text_action", "value": text}}
+    return {
+        "name": HELPER_PREFIX + device_id,
+        "icon": "home",
+        "triggers": [{"trigger": {"type": "scenario.trigger.voice", "value": encode_trigger(device_id)}}],
+        "steps": [{
+            "type": "scenarios.steps.actions.v2",
+            "parameters": {"items": [{
+                "id": device_id,
+                "type": "step.action.item.device",
+                "value": {"id": device_id, "item_type": "device", "capabilities": [capability]},
+            }]},
+        }],
+    }
+
+
 class QuasarClient:
     """Тот же интерфейс, что у YandexIoTClient: user_info / act / run_scenario."""
 
     def __init__(self, session: QuasarSession):
         self.s = session
         self.last_raw: dict[str, Any] = {}
+        self._scenarios: list[dict[str, Any]] = []
+        self._helpers: dict[str, str] = {}  # device_id -> id служебного сценария
 
     async def close(self) -> None:
         await self.s.close()
@@ -225,11 +261,53 @@ class QuasarClient:
         self.last_raw = data
         try:
             scen = await self.s.request("GET", f"{IOT}/m/user/scenarios")
-            scenarios = scen.get("scenarios", [])
+            self._scenarios = scen.get("scenarios", []) or []
         except Exception as e:  # сценарии не критичны
             log.warning("Не удалось получить сценарии: %s", e)
-            scenarios = []
-        return convert_v3(data, scenarios)
+        visible = [x for x in self._scenarios if not str(x.get("name", "")).startswith(HELPER_PREFIX)]
+        return convert_v3(data, visible)
+
+    async def _helper_id(self, device_id: str) -> str:
+        if device_id in self._helpers:
+            return self._helpers[device_id]
+        if not self._scenarios:
+            scen = await self.s.request("GET", f"{IOT}/m/user/scenarios")
+            self._scenarios = scen.get("scenarios", []) or []
+        trigger = encode_trigger(device_id)
+        for sc in self._scenarios:
+            trig = (sc.get("triggers") or [{}])[0]
+            value = trig.get("value") if isinstance(trig, dict) else None
+            if sc.get("name") == HELPER_PREFIX + device_id or value == trigger:
+                self._helpers[device_id] = sc["id"]
+                return sc["id"]
+        created = await self.s.request(
+            "POST", f"{IOT}/m/v4/user/scenarios", json=helper_scenario(device_id, "готово", "tts")
+        )
+        sid = created.get("scenario_id")
+        if not sid:
+            raise YandexAPIError(f"Не удалось создать служебный сценарий: {created}")
+        self._helpers[device_id] = sid
+        return sid
+
+    async def speak(self, device_id: str, text: str, mode: str = "tts") -> None:
+        """mode="tts" — колонка произносит текст; mode="command" — выполняет его как голосовую команду."""
+        text = text.strip()
+        if not text:
+            raise ValueError("Пустой текст")
+        if len(text) > TTS_MAX:
+            raise ValueError(f"Текст длиннее {TTS_MAX} символов ({len(text)}) — так Яндекс не принимает")
+        sid = await self._helper_id(device_id)
+        try:
+            await self.s.request("PUT", f"{IOT}/m/v4/user/scenarios/{sid}", json=helper_scenario(device_id, text, mode))
+        except YandexAPIError as e:
+            if e.status_code != 404:
+                raise
+            # сценарий удалили в приложении Яндекса — создаём заново
+            self._helpers.pop(device_id, None)
+            self._scenarios = []
+            sid = await self._helper_id(device_id)
+            await self.s.request("PUT", f"{IOT}/m/v4/user/scenarios/{sid}", json=helper_scenario(device_id, text, mode))
+        await self.s.request("POST", f"{IOT}/m/user/scenarios/{sid}/actions")
 
     async def act(self, device_id: str, *actions: dict[str, Any]) -> dict[str, Any]:
         data = await self.s.request(

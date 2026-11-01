@@ -1,6 +1,6 @@
 [project]
 name = "smarthome"
-version = "0.3.1"
+version = "0.4.0"
 description = "Собственный умный дом, совместимый с Яндекс Домом"
 requires-python = ">=3.11"
 dependencies = [

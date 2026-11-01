@@ -157,6 +157,7 @@ def create_app(
     async def devices():
         return {
             "rooms": hub.rooms,
+            "households": hub.extra.get("households", []),
             "devices": [hub.to_dict(d) for d in hub.devices.values()],
         }
 
@@ -185,6 +186,16 @@ def create_app(
         except Exception as e:
             raise HTTPException(400, str(e))
         return hub.to_dict(dev)
+
+    @app.post("/api/devices/{device_id}/speak")
+    async def device_speak(device_id: str, body: dict = Body(...)):
+        """{"text": "Привет", "mode": "tts"} — сказать; mode="command" — выполнить как голосовую команду."""
+        dev = _device(device_id)
+        try:
+            await hub.speak(dev.id, str(body.get("text", "")), "command" if body.get("mode") == "command" else "tts")
+        except Exception as e:
+            raise HTTPException(400, str(e))
+        return {"ok": True}
 
     @app.get("/api/devices/{device_id}/history")
     async def device_history(device_id: str, key: str | None = None, hours: float = 24):
