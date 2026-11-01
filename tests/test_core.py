@@ -331,3 +331,4 @@ def test_ipa_download(tmp_path):
         r = c.get("/app.ipa")
         assert r.status_code == 200 and r.content == b"PK-test"
         assert "SmartHome.ipa" in r.headers["content-disposition"]
+        assert "itms-services://" in c.get("/install").text

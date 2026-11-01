@@ -12,7 +12,7 @@ services:
       - ./data:/data
       - ./dist:/dist:ro
     ports:
-      - "8000:8000"
+      - "${SMARTHOME_PUBLIC_PORT:-8000}:8000"
 
   mosquitto:
     profiles: ["zigbee"]

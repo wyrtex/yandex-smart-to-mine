@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
@@ -24,6 +24,18 @@ from ..storage import Storage
 STATIC = Path(__file__).parent / "static"
 COOKIE = "sh_session"
 PUBLIC_PATHS = {"/api/login", "/api/ping"}
+
+# iOS требует, чтобы манифест и IPA отдавались по HTTPS — берём их с GitHub
+MANIFEST_URL = "https://raw.githubusercontent.com/wyrtex/yandex-smart-to-mine/master/dist/manifest.plist"
+INSTALL_URL = "itms-services://?action=download-manifest&url=" + MANIFEST_URL
+INSTALL_HTML = f"""<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Установка «Умный дом»</title>
+<style>body{{background:#0f1115;color:#eef0f4;font:17px -apple-system,sans-serif;text-align:center;padding:12vh 24px}}
+a.b{{display:inline-block;background:#5b8cff;color:#fff;text-decoration:none;padding:16px 28px;border-radius:16px;
+font-weight:600;margin-top:24px}}p{{color:#8b90a0}}</style></head><body>
+<div style="font-size:64px">🏠</div><h1>Умный дом</h1>
+<a class="b" href="{INSTALL_URL}">Установить приложение</a>
+<p>После установки откройте приложение и укажите адрес этого сервера.</p></body></html>"""
 
 
 def _session_token(password: str) -> str:
@@ -303,6 +315,11 @@ def create_app(
         if not ipa.is_file():
             raise HTTPException(404, "IPA не найден")
         return FileResponse(ipa, media_type="application/octet-stream", filename="SmartHome.ipa")
+
+    @app.get("/install")
+    async def install_page():
+        """Страница установки iOS-приложения по воздуху (манифест лежит на GitHub по HTTPS)."""
+        return HTMLResponse(INSTALL_HTML)
 
     @app.get("/")
     async def index():
