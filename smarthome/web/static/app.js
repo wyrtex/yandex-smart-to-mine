@@ -519,10 +519,13 @@ function renderSettings() {
       ${ya.logged_in && ya.token_source !== "env" ? `<button class="btn small danger" data-ya-logout>Выйти</button>` : ""}</div>`;
     if (!ya.logged_in || ya.last_error) {
       html += ya.can_login ? `<div class="row"><div class="grow">
-        <div class="sub" style="margin-bottom:8px">1. Нажмите «Войти через Яндекс» и подтвердите доступ.<br>2. Скопируйте код со страницы Яндекса и вставьте сюда.</div>
-        <div class="btns" style="margin-bottom:8px"><button class="btn primary" data-ya-login>Войти через Яндекс</button></div>
-        <input id="ya-code" placeholder="Код подтверждения" inputmode="numeric" autocomplete="one-time-code">
-        <div class="btns" style="margin-top:8px"><button class="btn" data-ya-code>Отправить код</button></div></div></div>`
+        <div class="sub" style="margin-bottom:8px">1. Нажмите одну из кнопок и подтвердите доступ.<br>
+          2. Скопируйте код или токен со страницы Яндекса и вставьте сюда.<br>
+          Если «Войти через Яндекс» выдаёт ошибку <i>unauthorized_client</i> — используйте «Получить токен».</div>
+        <div class="btns" style="margin-bottom:8px"><button class="btn primary" data-ya-login="code">Войти через Яндекс</button>
+          <button class="btn" data-ya-login="token">Получить токен</button></div>
+        <input id="ya-code" placeholder="Код или токен" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="btns" style="margin-top:8px"><button class="btn" data-ya-code>Отправить</button></div></div></div>`
         : `<div class="row"><div class="grow sub">На сервере не заданы YANDEX_CLIENT_ID и YANDEX_CLIENT_SECRET.</div></div>`;
     }
   }
@@ -586,7 +589,7 @@ document.addEventListener("click", async (e) => {
       await api(`/api/scenarios/${encodeURIComponent(ds.scDel)}`, { method: "DELETE" });
       closeSheet(); await loadScenarios(); render();
     } else if (ds.yaRun) { await api(`/api/yandex/scenarios/${encodeURIComponent(ds.yaRun)}/run`, { body: {} }); toast("Запущено"); }
-    else if (ds.yaLogin !== undefined) openExternal((await api("/api/yandex/login-url")).url);
+    else if (ds.yaLogin !== undefined) openExternal((await api("/api/yandex/login-url?mode=" + (ds.yaLogin || "code"))).url);
     else if (ds.yaCode !== undefined) {
       await api("/api/yandex/code", { body: { code: $("#ya-code").value } });
       toast("Вход выполнен"); setTimeout(refreshAll, 1500);

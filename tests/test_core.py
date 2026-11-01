@@ -332,3 +332,19 @@ def test_ipa_download(tmp_path):
         assert r.status_code == 200 and r.content == b"PK-test"
         assert "SmartHome.ipa" in r.headers["content-disposition"]
         assert "itms-services://" in c.get("/install").text
+
+
+def test_login_with_pasted_token():
+    calls = []
+    settings = Settings(yandex_client_id="cid", yandex_client_secret="sec")
+    storage = Storage(":memory:")
+    app = create_app(settings, storage, [YandexAdapter(settings, storage, _yandex_transport(calls))])
+    with TestClient(app) as c:
+        assert "response_type=token" in c.get("/api/yandex/login-url?mode=token").json()["url"]
+        assert "response_type=code" in c.get("/api/yandex/login-url").json()["url"]
+        assert c.get("/api/status").json()["adapters"]["yandex"]["logged_in"] is False
+        r = c.post("/api/yandex/code", json={"code": "  y0_AgAAAAAtestTokenValue1234567890  "})
+        assert r.status_code == 200, r.text
+        assert storage.get_json("yandex_oauth")["access_token"] == "y0_AgAAAAAtestTokenValue1234567890"
+        assert c.get("/api/status").json()["adapters"]["yandex"]["logged_in"] is True
+        _wait_devices(c)

@@ -247,9 +247,9 @@ def create_app(
         return {"ok": True}
 
     @app.get("/api/yandex/login-url")
-    async def yandex_login_url():
+    async def yandex_login_url(mode: str = "code"):
         try:
-            return {"url": yandex().login_url()}
+            return {"url": yandex().login_url("token" if mode == "token" else "code")}
         except RuntimeError as e:
             raise HTTPException(400, str(e))
 

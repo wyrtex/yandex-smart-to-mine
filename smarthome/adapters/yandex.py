@@ -44,15 +44,23 @@ class YandexAdapter:
     def logged_in(self) -> bool:
         return bool(self.token_info().get("access_token"))
 
-    def login_url(self) -> str:
+    def login_url(self, response_type: str = "code") -> str:
         if not self.settings.yandex_client_id:
             raise RuntimeError("Не задан YANDEX_CLIENT_ID")
-        return oauth.authorize_url(self.settings.yandex_client_id)
+        return oauth.authorize_url(self.settings.yandex_client_id, response_type)
 
     async def login_with_code(self, code: str) -> None:
-        tok = await oauth.exchange_code(
-            code, self.settings.yandex_client_id, self.settings.yandex_client_secret
-        )
+        """Принимает код подтверждения или сразу готовый OAuth-токен."""
+        code = code.strip()
+        if oauth.looks_like_token(code):
+            # проверяем токен запросом к API, прежде чем сохранить
+            async with YandexIoTClient(code, transport=self._transport) as client:
+                await client.user_info_raw()
+            tok = {"access_token": code, "refresh_token": None, "expires_at": time.time() + 365 * 86400}
+        else:
+            tok = await oauth.exchange_code(
+                code, self.settings.yandex_client_id, self.settings.yandex_client_secret
+            )
         self.storage.set_json(TOKEN_KEY, tok)
         self.last_error = None
         self.poll_soon(0)
