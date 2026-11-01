@@ -50,8 +50,8 @@ struct ServerSettingsView: View {
             }
             .navigationTitle(isInitial ? "Умный дом" : "Сервер")
             .toolbar {
-                if !isInitial {
-                    ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .cancellationAction) {
+                    if !isInitial {
                         Button("Закрыть") { dismiss() }
                     }
                 }
