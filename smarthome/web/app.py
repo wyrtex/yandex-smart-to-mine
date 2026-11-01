@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
@@ -264,6 +264,37 @@ def create_app(
         hub.log("yandex", "Выполнен вход в аккаунт Яндекса")
         return {"ok": True}
 
+    @app.post("/api/yandex/qr/start")
+    async def yandex_qr_start():
+        try:
+            link = await yandex().qr_start()
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(400, f"Не удалось получить QR-код: {e}")
+        return {"link": link}
+
+    @app.get("/api/yandex/qr.svg")
+    async def yandex_qr_svg():
+        link = yandex().qr_link
+        if not link:
+            raise HTTPException(404, "QR-код не запрошен")
+        return Response(_qr_svg(link), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/yandex/qr/check")
+    async def yandex_qr_check():
+        try:
+            return await yandex().qr_check()
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(400, f"Ошибка входа: {e}")
+
+    @app.get("/api/yandex/raw")
+    async def yandex_raw():
+        """Последний сырой ответ Яндекса — для отладки формата устройств."""
+        return yandex().raw()
+
     @app.get("/api/yandex/check")
     async def yandex_check():
         ok, message = await yandex().check_client()
@@ -332,6 +363,18 @@ def create_app(
 
     app.mount("/static", NoCacheStatic(directory=STATIC), name="static")
     return app
+
+
+def _qr_svg(data: str) -> bytes:
+    import io
+
+    import qrcode
+    import qrcode.image.svg
+
+    img = qrcode.make(data, image_factory=qrcode.image.svg.SvgPathImage, box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    return buf.getvalue()
 
 
 async def _prune_loop(storage: Storage) -> None:

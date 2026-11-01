@@ -528,25 +528,26 @@ function renderSettings() {
   const st = S.status || {}, ya = st.adapters?.yandex, zb = st.adapters?.zigbee;
   let html = `<h1>Настройки</h1><h2>Аккаунт Яндекса</h2><div class="list">`;
   if (ya) {
-    html += `<div class="row"><div class="grow"><div class="title">${ya.logged_in ? "Вход выполнен" : "Вход не выполнен"}</div>
+    const how = ya.method === "qr" ? " (по QR-коду)" : ya.method === "oauth" ? " (OAuth)" : "";
+    html += `<div class="row"><div class="grow"><div class="title">${ya.logged_in ? "Вход выполнен" + how : "Вход не выполнен"}</div>
       <div class="sub">${ya.last_ok ? "Последний опрос: " + fmtTime(ya.last_ok) : ""}
       ${ya.last_error ? `<br><span style="color:var(--danger)">${esc(ya.last_error)}</span>` : ""}
       ${ya.token_expires_at ? "<br>Токен до " + new Date(ya.token_expires_at * 1000).toLocaleDateString("ru-RU") : ""}</div></div>
       ${ya.token_source !== "env" ? `<button class="btn small danger" data-ya-logout>${ya.logged_in ? "Выйти" : "Сбросить"}</button>` : ""}</div>`;
     if (!ya.logged_in || ya.last_error) {
-      html += ya.can_login ? `<div class="row"><div class="grow">
-        <div class="sub" style="margin-bottom:8px">1. Нажмите одну из кнопок и подтвердите доступ.<br>
-          2. Скопируйте код или токен со страницы Яндекса и вставьте сюда.<br>
-          Если «Войти через Яндекс» выдаёт ошибку <i>unauthorized_client</i> — используйте «Получить токен».</div>
+      html += `<div class="row"><div class="grow">
+        <div class="title" style="margin-bottom:6px">Вход по QR-коду</div>
+        <div class="sub" style="margin-bottom:8px">Своё OAuth-приложение не нужно. Подтвердите вход в приложении Яндекса.</div>
+        <div id="qr-box">${qrBoxHTML()}</div></div></div>`;
+      html += ya.can_login ? `<div class="row"><div class="grow"><details><summary>Вход через своё OAuth-приложение</summary>
+        <div class="sub" style="margin:8px 0">Нажмите кнопку, подтвердите доступ, вставьте код или токен со страницы Яндекса.</div>
         <div class="btns" style="margin-bottom:8px">
-          <a class="btn primary" href="${esc(ya.login_url)}" target="_blank" rel="noopener" style="text-decoration:none">Войти через Яндекс</a>
-          <a class="btn" href="${esc(ya.token_url)}" target="_blank" rel="noopener" style="text-decoration:none">Получить токен</a></div>
+          <a class="btn" href="${esc(ya.login_url)}" target="_blank" rel="noopener">Войти через Яндекс</a>
+          <a class="btn" href="${esc(ya.token_url)}" target="_blank" rel="noopener">Получить токен</a></div>
         <div class="sub" style="margin-bottom:8px">ClientID на сервере: <b>${esc((ya.client_id || "—").slice(0, 8))}…</b>
           <button class="btn small" data-ya-check style="margin-left:6px">Проверить ключи</button></div>
-        <div class="sub" style="margin-bottom:8px">Если кнопка не открывает Safari — <span class="key" data-copy="${esc(ya.login_url)}" style="color:var(--accent2);cursor:pointer">скопируйте ссылку</span> и вставьте её в Safari.</div>
         <input id="ya-code" placeholder="Код или токен" autocapitalize="off" autocorrect="off" spellcheck="false">
-        <div class="btns" style="margin-top:8px"><button class="btn" data-ya-code>Отправить</button></div></div></div>`
-        : `<div class="row"><div class="grow sub">На сервере не заданы YANDEX_CLIENT_ID и YANDEX_CLIENT_SECRET.</div></div>`;
+        <div class="btns" style="margin-top:8px"><button class="btn" data-ya-code>Отправить</button></div></details></div></div>` : "";
     }
   }
   html += `</div><h2>Zigbee</h2><div class="list">`;
@@ -564,6 +565,64 @@ function renderSettings() {
   return html;
 }
 
+// ---- вход в Яндекс по QR-коду
+const QR = { link: null, ts: 0, timer: null, state: "idle" };
+
+function qrBoxHTML() {
+  if (QR.state === "idle" || !QR.link) {
+    return `<button class="btn primary" data-qr-start>${QR.state === "loading" ? "Получаю QR-код…" : "Показать QR-код"}</button>`;
+  }
+  if (QR.state === "expired") {
+    return `<div class="sub" style="margin-bottom:8px">Время вышло.</div><button class="btn primary" data-qr-start>Новый QR-код</button>`;
+  }
+  return `<div style="background:#fff;border-radius:16px;padding:10px;width:240px;max-width:100%">
+      <img src="/api/yandex/qr.svg?t=${QR.ts}" alt="QR" style="width:100%;display:block"></div>
+    <div class="sub" style="margin:10px 0">
+      <b>Вариант 1.</b> Откройте этот экран на другом устройстве (например, ${esc(location.host)} в браузере компьютера)
+      и отсканируйте QR-код камерой телефона, где вы вошли в Яндекс.<br>
+      <b>Вариант 2.</b> На этом телефоне нажмите кнопку ниже и подтвердите вход в Яндексе.</div>
+    <div class="btns"><a class="btn primary" href="${esc(QR.link)}" target="_blank" rel="noopener">Подтвердить на этом телефоне</a>
+      <span class="key" data-copy="${esc(QR.link)}" style="align-self:center;color:var(--accent2);cursor:pointer">скопировать ссылку</span></div>
+    <div class="sub" style="margin-top:8px">Жду подтверждения… QR-код действует 5 минут.</div>`;
+}
+
+function renderQR() {
+  const box = $("#qr-box");
+  if (box) box.innerHTML = qrBoxHTML();
+}
+
+async function qrStart() {
+  QR.state = "loading"; renderQR();
+  try {
+    const r = await api("/api/yandex/qr/start", { body: {} });
+    Object.assign(QR, { link: r.link, ts: Date.now(), state: "waiting" });
+  } catch (e) {
+    QR.state = "idle"; toast(e.message, true);
+  }
+  renderQR();
+  clearInterval(QR.timer);
+  if (QR.state === "waiting") QR.timer = setInterval(qrPoll, 2500);
+}
+
+async function qrPoll() {
+  try {
+    const r = await api("/api/yandex/qr/check", { body: {} });
+    if (r.done) {
+      clearInterval(QR.timer);
+      Object.assign(QR, { state: "idle", link: null });
+      toast("Вход выполнен, загружаю устройства…");
+      setTimeout(refreshAll, 2000);
+    } else if (r.expired) {
+      clearInterval(QR.timer);
+      QR.state = "expired"; renderQR();
+    }
+  } catch (e) {
+    clearInterval(QR.timer);
+    QR.state = "idle"; renderQR();
+    toast(e.message, true);
+  }
+}
+
 // ---- вход
 function showLogin() {
   if (S.ws) { S.ws.onclose = null; S.ws.close(); }
@@ -578,7 +637,7 @@ const debounce = {};
 document.addEventListener("click", async (e) => {
   const t = e.target.closest("[data-power],[data-dev],[data-set],[data-close],[data-tab],[data-color],[data-copy]," +
     "[data-sc-new],[data-sc-edit],[data-sc-run],[data-sc-save],[data-sc-del],[data-ya-run]," +
-    "[data-ya-code],[data-ya-logout],[data-ya-check],[data-permit],[data-reload],[data-native-settings],[data-login]");
+    "[data-ya-code],[data-ya-logout],[data-ya-check],[data-qr-start],[data-permit],[data-reload],[data-native-settings],[data-login]");
   if (!t) return;
   const ds = t.dataset;
   try {
@@ -611,6 +670,8 @@ document.addEventListener("click", async (e) => {
     else if (ds.yaCode !== undefined) {
       await api("/api/yandex/code", { body: { code: $("#ya-code").value } });
       toast("Вход выполнен"); setTimeout(refreshAll, 1500);
+    } else if (ds.qrStart !== undefined) {
+      await qrStart();
     } else if (ds.yaCheck !== undefined) {
       const r = await api("/api/yandex/check");
       toast(r.message, !r.ok);
