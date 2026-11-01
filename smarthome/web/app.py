@@ -296,6 +296,14 @@ def create_app(
 
     # --- интерфейс ----------------------------------------------------------
 
+    @app.get("/app.ipa")
+    async def download_ipa():
+        """iOS-приложение для установки (без пароля, чтобы скачать можно было с телефона)."""
+        ipa = settings.dist_dir / "SmartHome.ipa"
+        if not ipa.is_file():
+            raise HTTPException(404, "IPA не найден")
+        return FileResponse(ipa, media_type="application/octet-stream", filename="SmartHome.ipa")
+
     @app.get("/")
     async def index():
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})

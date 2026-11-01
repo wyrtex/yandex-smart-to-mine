@@ -7,8 +7,10 @@ services:
     env_file: .env
     environment:
       SMARTHOME_DATA_DIR: /data
+      SMARTHOME_DIST_DIR: /dist
     volumes:
       - ./data:/data
+      - ./dist:/dist:ro
     ports:
       - "8000:8000"
 

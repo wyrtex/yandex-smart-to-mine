@@ -314,9 +314,20 @@ def test_api_password():
         assert c.get("/api/ping").json()["auth_required"] is True
         assert c.get("/api/devices").status_code == 401
         assert c.get("/").status_code == 200  # интерфейс сам покажет экран входа
+        assert c.get("/app.ipa").status_code in (200, 404)  # скачивание без пароля
         assert c.post("/api/login", json={"password": "nope"}).status_code == 401
         assert c.post("/api/login", json={"password": "secret"}).status_code == 200
         assert c.get("/api/devices").status_code == 200  # cookie сохранилась
     client2, _ = make_client(password="secret")
     with client2 as c:
         assert c.get("/api/status", headers={"Authorization": "Bearer secret"}).status_code == 200
+
+
+def test_ipa_download(tmp_path):
+    (tmp_path / "SmartHome.ipa").write_bytes(b"PK-test")
+    settings = Settings(password="x", dist_dir=tmp_path)
+    storage = Storage(":memory:")
+    with TestClient(create_app(settings, storage, [FakeAdapter()])) as c:
+        r = c.get("/app.ipa")
+        assert r.status_code == 200 and r.content == b"PK-test"
+        assert "SmartHome.ipa" in r.headers["content-disposition"]

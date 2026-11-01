@@ -47,6 +47,8 @@ class Settings:
     z2m_base_topic: str = "zigbee2mqtt"
 
     timezone: str = "Europe/Moscow"
+    # Папка с файлами для скачивания (например, IPA приложения)
+    dist_dir: Path = field(default_factory=lambda: Path("dist"))
 
     @classmethod
     def from_env(cls, dotenv: str | Path = ".env") -> "Settings":
@@ -66,6 +68,7 @@ class Settings:
             mqtt_password=_env("MQTT_PASSWORD"),
             z2m_base_topic=_env("Z2M_BASE_TOPIC", "zigbee2mqtt"),
             timezone=_env("TZ", "Europe/Moscow"),
+            dist_dir=Path(_env("SMARTHOME_DIST_DIR", "dist")),
         )
 
 
