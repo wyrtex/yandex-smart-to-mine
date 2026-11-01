@@ -183,4 +183,7 @@ class YandexAdapter:
             "last_ok": self.last_ok,
             "last_error": self.last_error,
             "poll_interval": self.settings.yandex_poll_interval,
+            # готовые ссылки входа: интерфейс показывает их обычными ссылками
+            "login_url": self.login_url("code") if self.settings.yandex_client_id else None,
+            "token_url": self.login_url("token") if self.settings.yandex_client_id else None,
         }

@@ -45,6 +45,22 @@ function toast(msg, err = false) {
   toastTimer = setTimeout(() => t.classList.add("hidden"), err ? 4000 : 1800);
 }
 
+// navigator.clipboard недоступен по HTTP, поэтому копируем через скрытое поле
+function copyText(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px";
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (_) {}
+  ta.remove();
+  if (!ok && navigator.clipboard) { navigator.clipboard.writeText(text).catch(() => {}); ok = true; }
+  return ok;
+}
+
 function haptic() { try { native?.postMessage({ cmd: "haptic" }); } catch (_) {} }
 
 function openExternal(url) {
@@ -522,8 +538,10 @@ function renderSettings() {
         <div class="sub" style="margin-bottom:8px">1. Нажмите одну из кнопок и подтвердите доступ.<br>
           2. Скопируйте код или токен со страницы Яндекса и вставьте сюда.<br>
           Если «Войти через Яндекс» выдаёт ошибку <i>unauthorized_client</i> — используйте «Получить токен».</div>
-        <div class="btns" style="margin-bottom:8px"><button class="btn primary" data-ya-login="code">Войти через Яндекс</button>
-          <button class="btn" data-ya-login="token">Получить токен</button></div>
+        <div class="btns" style="margin-bottom:8px">
+          <a class="btn primary" href="${esc(ya.login_url)}" target="_blank" rel="noopener" style="text-decoration:none">Войти через Яндекс</a>
+          <a class="btn" href="${esc(ya.token_url)}" target="_blank" rel="noopener" style="text-decoration:none">Получить токен</a></div>
+        <div class="sub" style="margin-bottom:8px">Если кнопка не открывает Safari — <span class="key" data-copy="${esc(ya.login_url)}" style="color:var(--accent2);cursor:pointer">скопируйте ссылку</span> и вставьте её в Safari.</div>
         <input id="ya-code" placeholder="Код или токен" autocapitalize="off" autocorrect="off" spellcheck="false">
         <div class="btns" style="margin-top:8px"><button class="btn" data-ya-code>Отправить</button></div></div></div>`
         : `<div class="row"><div class="grow sub">На сервере не заданы YANDEX_CLIENT_ID и YANDEX_CLIENT_SECRET.</div></div>`;
@@ -574,8 +592,7 @@ document.addEventListener("click", async (e) => {
       const set = ds.model === "rgb" ? { "color_setting.rgb": ds.color } : { "color_setting.hsv": hexToHsv(ds.color) };
       await act(ds.id, set);
     } else if (ds.copy) {
-      await navigator.clipboard?.writeText(ds.copy).catch(() => {});
-      toast("Скопировано: " + ds.copy);
+      toast(copyText(ds.copy) ? "Скопировано" : "Не удалось скопировать", false);
     } else if (ds.scNew !== undefined) editScenario(null);
     else if (ds.scEdit) editScenario(ds.scEdit);
     else if (ds.scRun) { await api(`/api/scenarios/${encodeURIComponent(ds.scRun)}/run`, { body: {} }); toast("Запущено"); }

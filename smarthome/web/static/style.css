@@ -120,3 +120,5 @@ input.color-pick { width: 34px; height: 34px; padding: 0; border-radius: 50%; bo
   background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); cursor: pointer; overflow: hidden; }
 input.color-pick::-webkit-color-swatch-wrapper { padding: 0; }
 input.color-pick::-webkit-color-swatch { border: 0; border-radius: 50%; opacity: 0; }
+a.btn { color: var(--text); text-decoration: none; display: inline-block; }
+a.btn.primary { color: #fff; }
