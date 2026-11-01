@@ -532,7 +532,7 @@ function renderSettings() {
       <div class="sub">${ya.last_ok ? "Последний опрос: " + fmtTime(ya.last_ok) : ""}
       ${ya.last_error ? `<br><span style="color:var(--danger)">${esc(ya.last_error)}</span>` : ""}
       ${ya.token_expires_at ? "<br>Токен до " + new Date(ya.token_expires_at * 1000).toLocaleDateString("ru-RU") : ""}</div></div>
-      ${ya.logged_in && ya.token_source !== "env" ? `<button class="btn small danger" data-ya-logout>Выйти</button>` : ""}</div>`;
+      ${ya.token_source !== "env" ? `<button class="btn small danger" data-ya-logout>${ya.logged_in ? "Выйти" : "Сбросить"}</button>` : ""}</div>`;
     if (!ya.logged_in || ya.last_error) {
       html += ya.can_login ? `<div class="row"><div class="grow">
         <div class="sub" style="margin-bottom:8px">1. Нажмите одну из кнопок и подтвердите доступ.<br>
@@ -541,6 +541,8 @@ function renderSettings() {
         <div class="btns" style="margin-bottom:8px">
           <a class="btn primary" href="${esc(ya.login_url)}" target="_blank" rel="noopener" style="text-decoration:none">Войти через Яндекс</a>
           <a class="btn" href="${esc(ya.token_url)}" target="_blank" rel="noopener" style="text-decoration:none">Получить токен</a></div>
+        <div class="sub" style="margin-bottom:8px">ClientID на сервере: <b>${esc((ya.client_id || "—").slice(0, 8))}…</b>
+          <button class="btn small" data-ya-check style="margin-left:6px">Проверить ключи</button></div>
         <div class="sub" style="margin-bottom:8px">Если кнопка не открывает Safari — <span class="key" data-copy="${esc(ya.login_url)}" style="color:var(--accent2);cursor:pointer">скопируйте ссылку</span> и вставьте её в Safari.</div>
         <input id="ya-code" placeholder="Код или токен" autocapitalize="off" autocorrect="off" spellcheck="false">
         <div class="btns" style="margin-top:8px"><button class="btn" data-ya-code>Отправить</button></div></div></div>`
@@ -575,8 +577,8 @@ function showLogin() {
 const debounce = {};
 document.addEventListener("click", async (e) => {
   const t = e.target.closest("[data-power],[data-dev],[data-set],[data-close],[data-tab],[data-color],[data-copy]," +
-    "[data-sc-new],[data-sc-edit],[data-sc-run],[data-sc-save],[data-sc-del],[data-ya-run],[data-ya-login]," +
-    "[data-ya-code],[data-ya-logout],[data-permit],[data-reload],[data-native-settings],[data-login]");
+    "[data-sc-new],[data-sc-edit],[data-sc-run],[data-sc-save],[data-sc-del],[data-ya-run]," +
+    "[data-ya-code],[data-ya-logout],[data-ya-check],[data-permit],[data-reload],[data-native-settings],[data-login]");
   if (!t) return;
   const ds = t.dataset;
   try {
@@ -606,12 +608,14 @@ document.addEventListener("click", async (e) => {
       await api(`/api/scenarios/${encodeURIComponent(ds.scDel)}`, { method: "DELETE" });
       closeSheet(); await loadScenarios(); render();
     } else if (ds.yaRun) { await api(`/api/yandex/scenarios/${encodeURIComponent(ds.yaRun)}/run`, { body: {} }); toast("Запущено"); }
-    else if (ds.yaLogin !== undefined) openExternal((await api("/api/yandex/login-url?mode=" + (ds.yaLogin || "code"))).url);
     else if (ds.yaCode !== undefined) {
       await api("/api/yandex/code", { body: { code: $("#ya-code").value } });
       toast("Вход выполнен"); setTimeout(refreshAll, 1500);
+    } else if (ds.yaCheck !== undefined) {
+      const r = await api("/api/yandex/check");
+      toast(r.message, !r.ok);
     } else if (ds.yaLogout !== undefined) {
-      if (!confirm("Выйти из аккаунта Яндекса?")) return;
+      if (!confirm("Сбросить вход в аккаунт Яндекса?")) return;
       await api("/api/yandex/logout", { body: {} }); await refreshAll();
     } else if (ds.permit !== undefined) { await api("/api/zigbee/permit-join", { body: {} }); toast("Сопряжение открыто на 4 минуты"); }
     else if (ds.reload !== undefined) location.reload();

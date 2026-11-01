@@ -65,8 +65,16 @@ class YandexAdapter:
         self.last_error = None
         self.poll_soon(0)
 
+    async def check_client(self) -> tuple[bool, str]:
+        if not (self.settings.yandex_client_id and self.settings.yandex_client_secret):
+            return False, "На сервере не заданы YANDEX_CLIENT_ID / YANDEX_CLIENT_SECRET"
+        return await oauth.check_client(
+            self.settings.yandex_client_id, self.settings.yandex_client_secret, self._transport
+        )
+
     def logout(self) -> None:
         self.storage.delete(TOKEN_KEY)
+        self.last_error = None
         if self._hub:
             self._hub.sync_source(self.name, [])
 
@@ -184,6 +192,7 @@ class YandexAdapter:
             "last_error": self.last_error,
             "poll_interval": self.settings.yandex_poll_interval,
             # готовые ссылки входа: интерфейс показывает их обычными ссылками
+            "client_id": self.settings.yandex_client_id,
             "login_url": self.login_url("code") if self.settings.yandex_client_id else None,
             "token_url": self.login_url("token") if self.settings.yandex_client_id else None,
         }

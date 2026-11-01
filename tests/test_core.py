@@ -348,3 +348,20 @@ def test_login_with_pasted_token():
         assert storage.get_json("yandex_oauth")["access_token"] == "y0_AgAAAAAtestTokenValue1234567890"
         assert c.get("/api/status").json()["adapters"]["yandex"]["logged_in"] is True
         _wait_devices(c)
+
+
+def test_yandex_check_and_reset():
+    def handler(req):
+        if req.url.path == "/token":
+            return httpx.Response(400, json={"error": "invalid_grant"})
+        return httpx.Response(200, json=FIXTURE)
+    settings = Settings(yandex_client_id="cid", yandex_client_secret="sec")
+    storage = Storage(":memory:")
+    storage.set_json("yandex_oauth", {"access_token": "old"})
+    app = create_app(settings, storage, [YandexAdapter(settings, storage, httpx.MockTransport(handler))])
+    with TestClient(app) as c:
+        r = c.get("/api/yandex/check").json()
+        assert r["ok"] is True and r["client_id"] == "cid"
+        assert c.get("/api/status").json()["adapters"]["yandex"]["client_id"] == "cid"
+        assert c.post("/api/yandex/logout").status_code == 200
+        assert storage.get_json("yandex_oauth") is None

@@ -264,6 +264,11 @@ def create_app(
         hub.log("yandex", "Выполнен вход в аккаунт Яндекса")
         return {"ok": True}
 
+    @app.get("/api/yandex/check")
+    async def yandex_check():
+        ok, message = await yandex().check_client()
+        return {"ok": ok, "message": message, "client_id": settings.yandex_client_id}
+
     @app.post("/api/yandex/logout")
     async def yandex_logout():
         yandex().logout()

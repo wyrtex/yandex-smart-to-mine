@@ -68,3 +68,27 @@ async def refresh(
         },
         transport,
     )
+
+
+async def check_client(
+    client_id: str, client_secret: str, transport: httpx.AsyncBaseTransport | None = None
+) -> tuple[bool, str]:
+    """Проверка пары ClientID/секрет: обмениваем заведомо неверный код.
+
+    invalid_grant — Яндекс узнал приложение и секрет (ключи верны),
+    invalid_client — неверный ClientID или секрет.
+    """
+    async with httpx.AsyncClient(base_url=OAUTH_URL, timeout=15, transport=transport) as http:
+        resp = await http.post("/token", data={
+            "grant_type": "authorization_code", "code": "0000000",
+            "client_id": client_id, "client_secret": client_secret,
+        })
+    try:
+        err = resp.json().get("error", "")
+    except ValueError:
+        err = ""
+    if err == "invalid_grant":
+        return True, "Яндекс принял ClientID и секрет"
+    if err == "invalid_client":
+        return False, "Яндекс не принял ClientID или секрет — проверьте .env на сервере"
+    return False, f"Неожиданный ответ Яндекса: {resp.status_code} {resp.text[:200]}"
