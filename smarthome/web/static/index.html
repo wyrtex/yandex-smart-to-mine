@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f1115">
+  <title>Умный дом</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="conn" class="conn hidden">Нет связи с сервером…</div>
+
+  <main id="view"></main>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="home" class="active"><span>🏠</span>Дом</button>
+    <button data-tab="scenarios"><span>⚡</span>Сценарии</button>
+    <button data-tab="log"><span>📜</span>Журнал</button>
+    <button data-tab="settings"><span>⚙️</span>Настройки</button>
+  </nav>
+
+  <div id="sheet" class="sheet hidden">
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-body">
+      <div class="sheet-grip" data-close></div>
+      <div id="sheet-content"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -82,6 +82,8 @@ class Device(_Base):
     groups: list[str] = Field(default_factory=list)
     capabilities: list[Capability] = Field(default_factory=list)
     properties: list[Property] = Field(default_factory=list)
+    # Откуда устройство: yandex (облако Яндекса) или zigbee (свой стик)
+    source: str = "yandex"
 
     @property
     def short_type(self) -> str:

@@ -1,0 +1,40 @@
+# Запуск ядра:                      docker compose up -d --build
+# Вместе с Zigbee (стик подключён): docker compose --profile zigbee up -d --build
+services:
+  smarthome:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SMARTHOME_DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    ports:
+      - "8000:8000"
+
+  mosquitto:
+    profiles: ["zigbee"]
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    command: mosquitto -c /mosquitto-no-auth.conf
+    ports:
+      - "1883:1883"
+
+  zigbee2mqtt:
+    profiles: ["zigbee"]
+    image: koenkk/zigbee2mqtt:latest
+    restart: unless-stopped
+    depends_on: [mosquitto]
+    environment:
+      TZ: Europe/Moscow
+      ZIGBEE2MQTT_CONFIG_MQTT_SERVER: mqtt://mosquitto:1883
+      ZIGBEE2MQTT_CONFIG_FRONTEND_ENABLED: "true"
+      ZIGBEE2MQTT_CONFIG_FRONTEND_PORT: "8080"
+      ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_ENABLED: "false"
+      ZIGBEE2MQTT_CONFIG_SERIAL_PORT: ${ZIGBEE_SERIAL_PORT:-/dev/ttyUSB0}
+    volumes:
+      - ./data/zigbee2mqtt:/app/data
+    devices:
+      - ${ZIGBEE_SERIAL_PORT:-/dev/ttyUSB0}:${ZIGBEE_SERIAL_PORT:-/dev/ttyUSB0}
+    ports:
+      - "8080:8080"

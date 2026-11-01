@@ -1,0 +1,59 @@
+name: iOS IPA
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить XcodeGen
+        run: brew install xcodegen
+
+      - name: Сгенерировать Xcode-проект
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Собрать (без подписи)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project SmartHome.xcodeproj -scheme SmartHome -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -n 80
+
+      - name: Упаковать IPA
+        working-directory: ios
+        run: |
+          rm -rf Payload && mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/SmartHome.app Payload/
+          zip -qry SmartHome.ipa Payload
+          ls -la SmartHome.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartHome-ipa
+          path: ios/SmartHome.ipa
+
+      - name: Опубликовать в релиз ios-latest
+        if: github.ref_name == github.event.repository.default_branch
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-latest
+          name: iOS-приложение (последняя сборка)
+          body: |
+            Неподписанный IPA. Установка: Sideloadly / AltStore / TrollStore (подпишут вашим Apple ID).
+            Интерфейс загружается с сервера, поэтому переустанавливать приложение нужно только при изменениях в папке ios/.
+          files: ios/SmartHome.ipa
+          prerelease: true
+          make_latest: false

@@ -123,7 +123,31 @@ def build_parser() -> argparse.ArgumentParser:
     sc = sub.add_parser("scenario", help="запустить сценарий Яндекса")
     sc.add_argument("name")
     sc.set_defaults(func=cmd_scenario)
+
+    sv = sub.add_parser("serve", help="запустить сервер умного дома (API + интерфейс)")
+    sv.add_argument("--host")
+    sv.add_argument("--port", type=int)
+    sv.set_defaults(func=None)
     return p
+
+
+def serve(args: argparse.Namespace) -> None:
+    import logging
+
+    import uvicorn
+
+    from .config import Settings
+    from .web.app import create_app
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    settings = Settings.from_env()
+    uvicorn.run(
+        create_app(settings),
+        host=args.host or settings.host,
+        port=args.port or settings.port,
+        proxy_headers=True,
+        ws_ping_interval=20,
+    )
 
 
 async def _run(args: argparse.Namespace) -> None:
@@ -133,6 +157,9 @@ async def _run(args: argparse.Namespace) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
+    if args.cmd == "serve":
+        serve(args)
+        return
     try:
         asyncio.run(_run(args))
     except (YandexAPIError, ValueError) as e:
