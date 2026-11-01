@@ -20,7 +20,7 @@ from typing import Any, Callable
 import httpx
 
 from .client import YandexAPIError
-from .models import Device, Household, Room, Scenario, UserInfo
+from .models import Capability, Device, Household, Property, Room, Scenario, UserInfo
 
 log = logging.getLogger(__name__)
 
@@ -265,16 +265,20 @@ def convert_v3(data: dict[str, Any], scenarios: list[dict[str, Any]] | None = No
                 room_id = f"{hid}:{room_name}"
                 rooms.setdefault(room_id, Room(id=room_id, name=room_name, household_id=hid))
                 rooms[room_id].devices.append(item["id"])
-            dev = Device(
-                id=item["id"],
-                name=item.get("name", item["id"]),
-                type=item["type"],
-                household_id=hid,
-                room=room_id,
-                skill_id=item.get("skill_id"),
-                capabilities=[c for c in item.get("capabilities", []) or [] if c.get("type")],
-                properties=[p for p in item.get("properties", []) or [] if p.get("type")],
-            )
+            try:
+                dev = Device(
+                    id=item["id"],
+                    name=item.get("name", item["id"]),
+                    type=item["type"],
+                    household_id=hid,
+                    room=room_id,
+                    skill_id=item.get("skill_id"),
+                    capabilities=_safe_list(Capability, item.get("capabilities"), item),
+                    properties=_safe_list(Property, item.get("properties"), item),
+                )
+            except Exception as e:  # одно странное устройство не должно ломать весь список
+                log.warning("Устройство %s пропущено: %s", item.get("name"), e)
+                continue
             dev.online = item.get("state", "online")  # type: ignore[attr-defined]
             dev.shared = shared  # type: ignore[attr-defined]
             if di := (item.get("parameters") or {}).get("device_info"):
@@ -294,6 +298,19 @@ def convert_v3(data: dict[str, Any], scenarios: list[dict[str, Any]] | None = No
             if s.get("id")
         ],
     )
+
+
+def _safe_list(model: Any, items: Any, device: dict[str, Any]) -> list[Any]:
+    """Разбираем умения/свойства по одному: неразобранное пропускаем, остальное оставляем."""
+    out = []
+    for raw in items or []:
+        if not isinstance(raw, dict) or not raw.get("type"):
+            continue
+        try:
+            out.append(model.model_validate(raw))
+        except Exception as e:
+            log.warning("%s: пропущено %s (%s)", device.get("name"), raw.get("type"), e)
+    return out
 
 
 def _json(r: httpx.Response) -> dict[str, Any]:

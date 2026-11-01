@@ -8,11 +8,31 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class _Base(BaseModel):
     model_config = ConfigDict(extra="allow")
+
+
+def _to_timestamp(v: Any) -> float | None:
+    """last_updated бывает числом (официальный API) или ISO-строкой (API «Дома с Алисой»)."""
+    if v is None or v == "":
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            pass
+        try:
+            return datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return None
+    return None
 
 
 class State(_Base):
@@ -29,6 +49,8 @@ class Capability(_Base):
     parameters: dict[str, Any] = Field(default_factory=dict)
     state: State | None = None
     last_updated: float | None = None
+
+    _ts = field_validator("last_updated", mode="before")(lambda cls, v: _to_timestamp(v))
 
     @property
     def short_type(self) -> str:
@@ -55,6 +77,8 @@ class Property(_Base):
     parameters: dict[str, Any] = Field(default_factory=dict)
     state: State | None = None
     last_updated: float | None = None
+
+    _ts = field_validator("last_updated", mode="before")(lambda cls, v: _to_timestamp(v))
 
     @property
     def short_type(self) -> str:

@@ -30,7 +30,13 @@ V3 = {
              "room_name": "Прихожая", "state": "online", "capabilities": [],
              "properties": [{"type": "devices.properties.event", "retrievable": True,
                              "parameters": {"instance": "open", "events": [{"value": "opened"}, {"value": "closed"}]},
-                             "state": {"instance": "open", "value": "closed"}}]},
+                             "state": {"instance": "open", "value": "closed"},
+                             "last_updated": "2026-10-31T19:32:02Z"}]},
+            {"id": "weird", "name": "Странное", "type": "devices.types.other", "item_type": "device",
+             "capabilities": [{"type": "devices.capabilities.on_off", "retrievable": "не bool",
+                               "parameters": {}, "state": {"instance": "on", "value": True}},
+                              {"type": "devices.capabilities.toggle", "parameters": {"instance": "mute"}}],
+             "properties": []},
             {"id": "grp", "name": "Группа", "item_type": "group", "type": "devices.types.light"},
         ],
     }],
@@ -39,7 +45,10 @@ V3 = {
 
 def test_convert_v3():
     info = convert_v3(V3, [{"id": "s1", "name": "Утро"}])
-    assert [d.id for d in info.devices] == ["lamp", "door"]
+    assert [d.id for d in info.devices] == ["lamp", "door", "weird"]
+    assert info.device("door").property("open").last_updated == 1793475122.0
+    # битое умение пропущено, остальные на месте
+    assert [c.short_type for c in info.device("weird").capabilities] == ["toggle"]
     lamp = info.device("lamp")
     assert info.room_name(lamp.room) == "Спальня"
     assert lamp.capability("range", "brightness").state.value == 40
@@ -129,7 +138,7 @@ def test_qr_login_full_cycle():
         st = c.get("/api/status").json()["adapters"]["yandex"]
         assert st["logged_in"] is True and st["method"] == "qr"
         devs = _wait(lambda: c.get("/api/devices").json()["devices"])
-        assert {d["id"] for d in devs} == {"lamp", "door"}
+        assert {d["id"] for d in devs} == {"lamp", "door", "weird"}
         assert c.get("/api/devices/lamp").json()["room_name"] == "Спальня"
         assert c.get("/api/yandex/scenarios").json()[0]["name"] == "Утро"
 
