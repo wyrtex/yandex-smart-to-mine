@@ -22,14 +22,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<!-- Разрешаем обычный HTTP (без S) и ws:// к любому серверу -->
+	<!-- Разрешаем обычный HTTP (без S) и ws:// к любому серверу.
+	     Только этот ключ: если добавить NSAllowsArbitraryLoadsInWebContent или
+	     NSAllowsLocalNetworking, iOS начинает игнорировать NSAllowsArbitraryLoads. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<true/>
-		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
