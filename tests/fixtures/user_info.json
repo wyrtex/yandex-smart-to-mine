@@ -1,0 +1,82 @@
+{
+  "status": "ok",
+  "request_id": "req-1",
+  "households": [{"id": "hh-1", "name": "Мой дом", "type": "households.types.personal"}],
+  "rooms": [
+    {"id": "room-1", "name": "Гостиная", "household_id": "hh-1", "devices": ["lamp-1", "tv-1", "temp-1"]},
+    {"id": "room-2", "name": "Прихожая", "household_id": "hh-1", "devices": ["door-1", "sw-1"]}
+  ],
+  "groups": [],
+  "scenarios": [{"id": "sc-1", "name": "Я дома", "is_active": true}],
+  "devices": [
+    {
+      "id": "lamp-1", "name": "Лампа", "aliases": [], "type": "devices.types.light",
+      "external_id": "ext-lamp", "skill_id": "Q", "household_id": "hh-1", "room": "room-1", "groups": [],
+      "capabilities": [
+        {"type": "devices.capabilities.on_off", "retrievable": true, "reportable": true,
+         "parameters": {"split": false}, "state": {"instance": "on", "value": true}, "last_updated": 1761980000.0},
+        {"type": "devices.capabilities.color_setting", "retrievable": true, "reportable": true,
+         "parameters": {"color_model": "hsv", "temperature_k": {"min": 1500, "max": 6500},
+                        "color_scene": {"scenes": [{"id": "night"}, {"id": "party"}]}},
+         "state": {"instance": "temperature_k", "value": 4500}, "last_updated": 1761980000.0},
+        {"type": "devices.capabilities.range", "retrievable": true, "reportable": true,
+         "parameters": {"instance": "brightness", "unit": "unit.percent", "random_access": true,
+                        "looped": false, "range": {"min": 1, "max": 100, "precision": 1}},
+         "state": {"instance": "brightness", "value": 80}, "last_updated": 1761980000.0}
+      ],
+      "properties": []
+    },
+    {
+      "id": "door-1", "name": "Датчик двери", "type": "devices.types.sensor.open",
+      "household_id": "hh-1", "room": "room-2",
+      "capabilities": [],
+      "properties": [
+        {"type": "devices.properties.event", "retrievable": true, "reportable": true,
+         "parameters": {"instance": "open", "events": [{"value": "opened"}, {"value": "closed"}]},
+         "state": {"instance": "open", "value": "closed"}, "last_updated": 1761980100.0},
+        {"type": "devices.properties.float", "retrievable": true, "reportable": true,
+         "parameters": {"instance": "battery_level", "unit": "unit.percent"},
+         "state": {"instance": "battery_level", "value": 97}, "last_updated": 1761980100.0}
+      ]
+    },
+    {
+      "id": "temp-1", "name": "Климат", "type": "devices.types.sensor.climate",
+      "household_id": "hh-1", "room": "room-1",
+      "capabilities": [],
+      "properties": [
+        {"type": "devices.properties.float", "retrievable": true, "reportable": true,
+         "parameters": {"instance": "temperature", "unit": "unit.temperature.celsius"},
+         "state": {"instance": "temperature", "value": 22.4}, "last_updated": 1761980200.0},
+        {"type": "devices.properties.float", "retrievable": true, "reportable": true,
+         "parameters": {"instance": "humidity", "unit": "unit.percent"},
+         "state": {"instance": "humidity", "value": 41}, "last_updated": 1761980200.0}
+      ]
+    },
+    {
+      "id": "tv-1", "name": "Телевизор", "type": "devices.types.media_device.tv",
+      "household_id": "hh-1", "room": "room-1",
+      "capabilities": [
+        {"type": "devices.capabilities.on_off", "retrievable": false, "reportable": false,
+         "parameters": {"split": true}, "state": null},
+        {"type": "devices.capabilities.range", "retrievable": false, "reportable": false,
+         "parameters": {"instance": "volume", "random_access": false, "range": {"min": 0, "max": 100, "precision": 1}},
+         "state": null},
+        {"type": "devices.capabilities.toggle", "retrievable": false, "reportable": false,
+         "parameters": {"instance": "mute"}, "state": null},
+        {"type": "devices.capabilities.mode", "retrievable": false, "reportable": false,
+         "parameters": {"instance": "input_source", "modes": [{"value": "one"}, {"value": "two"}]}, "state": null}
+      ],
+      "properties": []
+    },
+    {
+      "id": "sw-1", "name": "Выключатель", "type": "devices.types.switch",
+      "household_id": "hh-1", "room": "room-2",
+      "capabilities": [
+        {"type": "devices.capabilities.on_off", "retrievable": true, "reportable": true,
+         "parameters": {}, "state": {"instance": "on", "value": false}}
+      ],
+      "properties": [],
+      "some_future_field": {"kept": true}
+    }
+  ]
+}
